@@ -2,7 +2,7 @@
 
 **YUV 转换基础库 —— NV21 / YUV_420_888 转 RGB、旋转与镜像，纯计算、无平台依赖。**
 
-> 状态：**Round-1 架构与声明可评审**。已写入数据结构与 `declare` 签名，`moon check` 0 error（5 条预期 `0068` 告警）。**无业务逻辑**。
+> 状态：**实现完成，API 冻结前对账（R2 准备轮）**。数据结构与 5 个 API（`to_rgb` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}`）全部为真实实现（0 条 `0068`），四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（35 tests；`pkg.generated.mbti` 与源码对账一致，冻结后签名变更即破坏性变更）。**纯计算、无 I/O、无平台依赖**。
 
 ## 定位与为什么存在
 
@@ -28,21 +28,23 @@ Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就�
 
 - 平台：全后端（`preferred_target = "wasm"`，未改动）；桌面即可测试，是本轮**成本最低、可测试性最高**的库。
 - 许可：本仓库 Apache-2.0；转换算法为公开标准系数，无外部二进制、无再分发风险。
-- 风险：色彩空间系数必须显式（避免隐式 BT.601 假设）；YUV_420_888 三平面 U/V 共享 `rowStride`/`pixelStride`、Y 平面 pixelStride=1，不能假设紧凑布局；大图逐像素性能用 `moon bench` 固定阈值守门。
+- 风险：色彩空间系数必须显式（避免隐式 BT.601 假设）；YUV_420_888 三平面 U/V 共享 `rowStride`/`pixelStride`、Y 平面 pixelStride=1，不能假设紧凑布局（**已按 stride 校验实现**）；大图逐像素性能计划用 `moon bench` 固定阈值守门（**本轮未引入 bench**，属后续优化）。
 
 ## 测试与验收
 
-- **测试策略**：固定像素 golden（含 NV21 与 stride 非紧凑的 YUV_420_888 样本）；BT.601/709 系数差分；尺寸/平面/stride/缓冲非法输入；`moon bench` 阈值；`moon test --enable-coverage`。
-- **验收标准**（实现轮）：输出与参考实现逐像素一致；基准不回退；所有非法输入返回 `YuvError` 而非越界读取。
+- **测试策略**：固定像素 golden（含 NV21 与 stride 非紧凑的 YUV_420_888 样本）；BT.601/709 系数差分；尺寸/平面/stride/缓冲非法输入；`moon bench` 阈值（**后移，本轮未引入**）。
+- **验收标准**：输出与参考实现逐像素一致（golden 覆盖）；所有非法输入返回 `YuvError` 而非越界读取（✅）；`moon check --deny-warn` 转绿（✅ R2 准备轮实跑）。
+- **门禁实跑（R2 准备轮，2026-11-07）**：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test`（**35 tests** 全过）→ `moon fmt --check`，全部 exit 0。
 
 ## 当前状态 / 本轮产物
 
 | 项 | 状态 |
 |---|---|
-| `yuv.mbt` 数据结构 + `declare` 签名 + 文档注释 | ✅ |
-| `pkg.generated.mbti` API 快照 | ✅ |
-| 像素计算 / 旋转 / 镜像 / SIMD 快路径 | ❌ 后续轮，`TODO(实现轮)` |
-| `moon check` | ✅ 0 error（5 × `0068`，预期） |
+| `yuv.mbt` / `convert.mbt`：数据结构 + 5 个 API（真实实现）+ 文档注释 | ✅ |
+| `pkg.generated.mbti` API 快照（与源码对账一致） | ✅ |
+| 像素计算 / 旋转 / 镜像 | ✅ 已实现 |
+| SIMD 快路径 / `moon bench` 阈值门禁 | ⬜ 后续优化（不改公开签名） |
+| 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` | ✅ 全绿（35 tests） |
 
 ## 本轮顺序说明
 
