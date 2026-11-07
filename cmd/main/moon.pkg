@@ -1,0 +1,5 @@
+// import {
+//   "hnlyxiaobing/yuv" @lib,
+// }
+
+pkgtype(kind: "executable")

@@ -1,0 +1,95 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "hnlyxiaobing/yuv"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn mirror_x(RgbImage) -> RgbImage raise YuvError
+
+pub fn rotate(RgbImage, Rotation) -> RgbImage raise YuvError
+
+pub fn to_rgb(YuvFrame, ConvertConfig) -> RgbImage raise YuvError
+
+// Errors
+#derive(@debug.Debug)
+pub suberror YuvError {
+  InvalidDimensions(Int32, Int32)
+  PlaneCountMismatch(Int32, Int32)
+  PlaneTooSmall(Int32, Int32)
+  UnsupportedFormat(String)
+  UnsupportedRotation(String)
+  StrideMismatch(String)
+  BufferSizeMismatch(Int32, Int32)
+}
+pub fn YuvError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub(all) enum ColorMatrix {
+  Bt601Limited
+  Bt601Full
+  Bt709Limited
+  Bt709Full
+}
+
+pub(all) struct ConvertConfig {
+  matrix : ColorMatrix
+  layout : RgbLayout
+  rotation : Rotation
+  mirror_x : Bool
+  clamp : Bool
+}
+
+pub(all) struct PlaneDescriptor {
+  data : Bytes
+  row_stride : Int32
+  pixel_stride : Int32
+}
+
+pub(all) struct RgbImage {
+  width : Int32
+  height : Int32
+  layout : RgbLayout
+  data : Bytes
+  timestamp_ns : UInt64
+}
+pub fn RgbImage::bytes(Self) -> Bytes
+pub fn RgbImage::channels(Self) -> Int32
+
+pub(all) enum RgbLayout {
+  Rgb
+  Bgr
+  Rgba
+  Bgra
+}
+
+pub(all) enum Rotation {
+  D0
+  D90
+  D180
+  D270
+}
+
+pub(all) enum YuvFormat {
+  Nv21
+  Nv12
+  Yuv420888
+  I420
+}
+
+pub(all) struct YuvFrame {
+  width : Int32
+  height : Int32
+  format : YuvFormat
+  planes : Array[PlaneDescriptor]
+  timestamp_ns : UInt64
+}
+
+// Type aliases
+pub type Channels = Int32
+
+// Traits
+pub trait FrameConverter {
+  fn to_rgb(Self, ConvertConfig) -> RgbImage raise YuvError
+}

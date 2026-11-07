@@ -1,0 +1,53 @@
+# hnlyxiaobing/yuv
+
+**YUV 转换基础库 —— NV21 / YUV_420_888 转 RGB、旋转与镜像，纯计算、无平台依赖。**
+
+> 状态：**Round-1 架构与声明可评审**。已写入数据结构与 `declare` 签名，`moon check` 0 error（5 条预期 `0068` 告警）。**无业务逻辑**。
+
+## 定位与为什么存在
+
+路线图「拼图三」复核（2026-11-06）：没有独立的 NV21 / YUV 转换库，但存在 `PaiGack/heic@0.1.0`（内嵌 YUV420→RGBA8）与 `lkdrt/palette_forge@0.1.0`（YUV 色彩空间）。因此判定修正为**移植既有转换内核 + 纯 MoonBit 自研 stride/色彩空间封装**（`docs/capability-matrix.md` #08），比"完全从零自研"少写色彩系数表，同时不引入 HEIC 编解码这类无关大依赖。
+
+Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就断在取帧之后。本库是**叶子库**：相机、推理、渲染三方共用其值类型，但本库不依赖任何一方。
+
+## 能力范围 / 非目标
+
+- **做**：NV21 / NV12 / YUV_420_888 / I420 → RGB/BGR/RGBA/BGRA；按 `row_stride` / `pixel_stride` 读取非紧凑平面；BT.601 / BT.709 有限/全幅度系数**显式传参**；90/180/270 旋转；水平镜像；输出通道数与字节访问。
+- **不做**：相机取帧、视频编码/解码、推理、渲染、GPU/SIMD 调度（预留优化路径）、HDR / 色彩管理。
+
+## 公开接口（速览）
+
+`to_rgb(YuvFrame, ConvertConfig) -> RgbImage raise YuvError`、`rotate`、`mirror_x`、`RgbImage::{channels, bytes}`。完整签名见 `API.md`。
+
+## 依赖
+
+- **本轮零依赖**；独立 `moon.mod`，`moon check` 独立通过。
+- 后续轮：可抽取 `heic@0.1.0` 的转换内核作参照（不引入 HEIC 依赖）；可选 `mizchi/simd@0.6.1` 作 SIMD 快路径评估，但按 ADR-0010 门槛需先说明用途与维护风险。
+
+## 平台与许可风险
+
+- 平台：全后端（`preferred_target = "wasm"`，未改动）；桌面即可测试，是本轮**成本最低、可测试性最高**的库。
+- 许可：本仓库 Apache-2.0；转换算法为公开标准系数，无外部二进制、无再分发风险。
+- 风险：色彩空间系数必须显式（避免隐式 BT.601 假设）；YUV_420_888 三平面 U/V 共享 `rowStride`/`pixelStride`、Y 平面 pixelStride=1，不能假设紧凑布局；大图逐像素性能用 `moon bench` 固定阈值守门。
+
+## 测试与验收
+
+- **测试策略**：固定像素 golden（含 NV21 与 stride 非紧凑的 YUV_420_888 样本）；BT.601/709 系数差分；尺寸/平面/stride/缓冲非法输入；`moon bench` 阈值；`moon test --enable-coverage`。
+- **验收标准**（实现轮）：输出与参考实现逐像素一致；基准不回退；所有非法输入返回 `YuvError` 而非越界读取。
+
+## 当前状态 / 本轮产物
+
+| 项 | 状态 |
+|---|---|
+| `yuv.mbt` 数据结构 + `declare` 签名 + 文档注释 | ✅ |
+| `pkg.generated.mbti` API 快照 | ✅ |
+| 像素计算 / 旋转 / 镜像 / SIMD 快路径 | ❌ 后续轮，`TODO(实现轮)` |
+| `moon check` | ✅ 0 error（5 × `0068`，预期） |
+
+## 本轮顺序说明
+
+按 `docs/dependency-graph.md`，`yuv` 是 W0 第 3 项（排序五判据里 C3/C4/C5 全优：无许可风险、纯函数可测、有可移植内核），并支撑 MVL-S 的起点。
+
+## 文档索引
+
+`DESIGN.md` · `API.md` · `../docs/architecture.md` §4（Wire Contract）· `../docs/adr/ADR-0002`、`ADR-0004`、`ADR-0005`
