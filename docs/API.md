@@ -45,6 +45,6 @@
 
 ## 状态
 
-**API 冻结后加法性变更（2026-11-09）**：新增 `to_rgb_fast`（加法性、非破坏性），已同步 `../pkg.generated.mbti` 快照（`moon info` 后 `git diff --exit-code -- ../pkg.generated.mbti` 通过）；根仓库 `../../API-CHANGELOG.md` 条目由主控汇总写入。其余签名与快照保持冻结不变。
+**API 冻结后加法性变更（2026-11-09）**：新增 `to_rgb_fast`（加法性、非破坏性），已同步 `../pkg.generated.mbti` 快照（`moon info` 后 `git diff --exit-code -- ../pkg.generated.mbti` 通过），并在本仓库 `docs/API.md` 登记。其余签名与快照保持冻结不变。
 四道门禁实跑全绿（2026-11-09）：`moon check --deny-warn`（0 error / 0 warn）· `moon build` · `moon test`（**44 tests** 全过）· `moon fmt --check`。
 实现：✅ `to_rgb` / `to_rgb_fast` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}` 均为真实实现；`moon bench` 块 + `../tools/bench-gate.ps1` 性能阈值门禁（fail-closed）已落地。
