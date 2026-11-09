@@ -798,6 +798,77 @@ test "to_rgb_fast geometry equals rotate then mirror_x pipeline" {
 }
 
 ///|
+test "to_rgb_fast handles odd dimensions within 1 LSB" {
+  // 3x1 与 5x3：批块不整除，尾行/尾列走标量回落路径。
+  let odd_3x1 = @yuv.YuvFrame::{
+    width: 3,
+    height: 1,
+    format: @yuv.YuvFormat::Nv21,
+    planes: [plane([90, 128, 180], 3, 1), plane([90, 240, 200, 60], 4, 2)],
+    timestamp_ns: 0UL,
+  }
+  let config = config_of(
+    @yuv.ColorMatrix::Bt601Full,
+    @yuv.RgbLayout::Rgb,
+    @yuv.Rotation::D0,
+    false,
+    true,
+  )
+  check_within_1lsb(
+    @yuv.to_rgb_fast(odd_3x1, config),
+    @yuv.to_rgb(odd_3x1, config),
+    "odd 3x1",
+  )
+  let odd_5x3 = @yuv.YuvFrame::{
+    width: 5,
+    height: 3,
+    format: @yuv.YuvFormat::I420,
+    planes: [
+      plane(
+        [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150],
+        5,
+        1,
+      ),
+      plane([110, 140, 128, 128, 128, 128], 3, 1),
+      plane([100, 130, 128, 128, 128, 128], 3, 1),
+    ],
+    timestamp_ns: 0UL,
+  }
+  check_within_1lsb(
+    @yuv.to_rgb_fast(odd_5x3, config),
+    @yuv.to_rgb(odd_5x3, config),
+    "odd 5x3 i420",
+  )
+}
+
+///|
+test "to_rgb_fast layouts BGR RGBA BGRA within 1 LSB" {
+  let frame = s_frame(@yuv.YuvFormat::Nv21, [150, 100])
+  let layouts = [
+    @yuv.RgbLayout::Rgb,
+    @yuv.RgbLayout::Bgr,
+    @yuv.RgbLayout::Rgba,
+    @yuv.RgbLayout::Bgra,
+  ]
+  for li in 0..<layouts.length() {
+    let config = config_of(
+      @yuv.ColorMatrix::Bt709Full,
+      layouts[li],
+      @yuv.Rotation::D0,
+      false,
+      true,
+    )
+    check_within_1lsb(
+      @yuv.to_rgb_fast(frame, config),
+      @yuv.to_rgb(frame, config),
+      "layout \{li}",
+    )
+    let img = @yuv.to_rgb_fast(frame, config)
+    check_int(img.channels(), if li < 2 { 3 } else { 4 }, "channels")
+  }
+}
+
+///|
 test "channels and bytes accessors" {
   let rgb = @yuv.RgbImage::{
     width: 1,

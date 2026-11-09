@@ -510,6 +510,140 @@ test "to_rgb_fast rejects malformed frames without panic" {
 }
 
 ///|
+/// 慢路径参考：逐像素标量循环（与快路径共用 `rgb_of_yuv_fx` 定点内核与 `sample_uv` 采样），
+/// 仅循环结构不同——这是快/慢等价性断言中的「慢路径」。
+fn slow_base_fx(
+  frame : YuvFrame,
+  layout : RgbLayout,
+  t : FxTable,
+  clamp_ : Bool,
+) -> Bytes {
+  let w = frame.width
+  let h = frame.height
+  let ch = channels_of_layout(layout)
+  let bgr = layout is Bgr || layout is Bgra
+  let out = FixedArray::make(w * h * ch, b'\x00')
+  let y_plane = frame.planes[0]
+  for y in 0..<h {
+    for x in 0..<w {
+      let yy = sample_plane(y_plane, x, y)
+      let (u, v) = sample_uv(frame, x, y)
+      let (r, g, b) = rgb_of_yuv_fx(yy, u, v, t, clamp_)
+      store_px(out, (y * w + x) * ch, r, g, b, ch, bgr)
+    }
+  }
+  Bytes::from_array(out[:])
+}
+
+///|
+/// 构造确定性测试帧：像素值按索引模填色，`strided` 时各平面带 3 字节行填充。
+fn synth_frame(
+  w : Int32,
+  h : Int32,
+  fmt : YuvFormat,
+  strided : Bool,
+) -> YuvFrame {
+  let pad = if strided { 3 } else { 0 }
+  let cw = w / 2 + w % 2
+  let chh = h / 2 + h % 2
+  let y_rs = w + pad
+  let y_plane = PlaneDescriptor::{
+    data: Bytes::makei(y_rs * h, i => ((i * 31 + 7) % 256).to_byte()),
+    row_stride: y_rs,
+    pixel_stride: 1,
+  }
+  match fmt {
+    Nv21 | Nv12 => {
+      let uv_rs = 2 * cw + pad
+      let uv_plane = PlaneDescriptor::{
+        data: Bytes::makei(uv_rs * chh, i => ((i * 47 + 13) % 256).to_byte()),
+        row_stride: uv_rs,
+        pixel_stride: 2,
+      }
+      YuvFrame::{
+        width: w,
+        height: h,
+        format: fmt,
+        planes: [y_plane, uv_plane],
+        timestamp_ns: 0UL,
+      }
+    }
+    I420 | Yuv420888 => {
+      let ps = if fmt is Yuv420888 && strided { 2 } else { 1 }
+      let u_rs = cw * ps + pad
+      let u_plane = PlaneDescriptor::{
+        data: Bytes::makei(u_rs * chh, i => ((i * 53 + 29) % 256).to_byte()),
+        row_stride: u_rs,
+        pixel_stride: ps,
+      }
+      let v_plane = PlaneDescriptor::{
+        data: Bytes::makei(u_rs * chh, i => ((i * 59 + 31) % 256).to_byte()),
+        row_stride: u_rs,
+        pixel_stride: ps,
+      }
+      YuvFrame::{
+        width: w,
+        height: h,
+        format: fmt,
+        planes: [y_plane, u_plane, v_plane],
+        timestamp_ns: 0UL,
+      }
+    }
+  }
+}
+
+///|
+/// 快/慢路径逐像素等价断言：批量/展开快路径与标量慢路径逐字节精确一致。
+/// 覆盖四格式 × 紧凑/非紧凑 stride × 奇偶尺寸（含批块不整除的尾行/尾列）×
+/// 四色彩矩阵 × 四布局 × clamp 双模式。
+test "fast batch path is byte-exact vs scalar slow path" {
+  let sizes = [1, 2, 3, 4, 5, 7]
+  let matrices = [Bt601Limited, Bt601Full, Bt709Limited, Bt709Full]
+  let layouts = [Rgb, Bgr, Rgba, Bgra]
+  let fmts = [Nv21, Nv12, I420, Yuv420888]
+  for fi in 0..<fmts.length() {
+    for si in 0..<sizes.length() {
+      for pi in 0..<2 {
+        let strided = pi == 1
+        let w = sizes[si]
+        let h = sizes[(si + 2) % sizes.length()]
+        let frame = synth_frame(w, h, fmts[fi], strided)
+        for mi in 0..<matrices.length() {
+          let t = fx_table_for(matrices[mi])
+          for ci in 0..<2 {
+            let clamp_ = ci == 1
+            for li in 0..<layouts.length() {
+              let (fast, fw, fh) = convert_base_fx(
+                frame,
+                layouts[li],
+                t,
+                clamp_,
+              )
+              let slow = slow_base_fx(frame, layouts[li], t, clamp_)
+              if fw != w || fh != h {
+                fail("dims \{fw}x\{fh}, want \{w}x\{h}")
+              }
+              if fast.length() != slow.length() {
+                fail(
+                  "fmt \{fi} size \{w}x\{h} strided=\{strided} matrix \{mi} clamp \{clamp_} layout \{li}: length \{fast.length()} vs \{slow.length()}",
+                )
+              }
+              for i in 0..<fast.length() {
+                if fast.at(i) != slow.at(i) {
+                  fail(
+                    "fmt \{fi} size \{w}x\{h} strided=\{strided} matrix \{mi} clamp \{clamp_} layout \{li}: byte[\{i}] \{fast.at(i).to_int()} vs \{slow.at(i).to_int()}",
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
 test "chroma grid uses ceil for odd dimensions" {
   // 3x1 校验通过：色度网格为 ceil(3/2)=2 对（4 字节），且第三列取第二对。
   let frame = nv21_frame(3, 1, [

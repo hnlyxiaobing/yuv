@@ -126,8 +126,36 @@ fn store_px(
 }
 
 ///|
-/// YUV 帧 → 紧凑 RGB 缓冲（源几何，定点内核）。
+/// 块内单像素直写：yq 为 Q16 亮度查表值，*_off 为块共享的 Q32 色度贡献偏移。
+/// 与标量内核 `rgb_of_yuv_fx` 的整数运算逐位一致（加法结合律在 Int64 精确成立，
+/// 无溢出：|base| ≤ 2^41、|off| ≤ 2^40），因此快/慢路径输出逐字节相等。
+fn write_block_px(
+  out : FixedArray[Byte],
+  i : Int32,
+  yq : Int32,
+  r_off : Int64,
+  g_off : Int64,
+  b_off : Int64,
+  ch : Int32,
+  bgr : Bool,
+  clamp_ : Bool,
+) -> Unit {
+  let base = yq.to_int64() << 16
+  let r = pack_int(fx_round32(base + r_off), clamp_)
+  let g = pack_int(fx_round32(base + g_off), clamp_)
+  let b = pack_int(fx_round32(base + b_off), clamp_)
+  store_px(out, i, r, g, b, ch, bgr)
+}
+
+///|
+/// YUV 帧 → 紧凑 RGB 缓冲（源几何，定点批量快路径）。
 /// 调用方须先通过 `validate_frame` 与输出尺寸校验（w*h*ch 在 Int32 内）。
+///
+/// 快路径结构（MoonBit 不暴露 SIMD 指令，以批量整数 + 查表 + 循环展开等效）：
+/// - 2×2 批块：4:2:0 色度按块共享，uv 贡献每块一次提升为 Q32 整数偏移
+///   （3 次乘法/块），块内 2×2 像素循环展开直写（每像素 1 次查表 + 3 次加移位）；
+/// - 奇数尾列（w 奇）与奇数尾行（h 奇）回落到标量内核 `rgb_of_yuv_fx` 逐像素处理，
+///   标量与批量两路算术逐位一致（见 `yuv_wbtest.mbt` 等价性测试）。
 fn convert_base_fx(
   frame : YuvFrame,
   layout : RgbLayout,
@@ -140,8 +168,78 @@ fn convert_base_fx(
   let bgr = layout is Bgr || layout is Bgra
   let out = FixedArray::make(w * h * ch, b'\x00')
   let y_plane = frame.planes[0]
-  for y in 0..<h {
-    for x in 0..<w {
+  for by in 0..<(h / 2) {
+    for bx in 0..<(w / 2) {
+      let (u, v) = sample_uv(frame, bx * 2, by * 2)
+      let uq = t.c_lut[u].to_int64()
+      let vq = t.c_lut[v].to_int64()
+      let r_off = t.rv.to_int64() * vq
+      let g_off = 0L - t.gu.to_int64() * uq - t.gv.to_int64() * vq
+      let b_off = t.bu.to_int64() * uq
+      let x0 = bx * 2
+      let y0 = by * 2
+      let i00 = (y0 * w + x0) * ch
+      let i10 = i00 + w * ch
+      write_block_px(
+        out,
+        i00,
+        t.y_lut[sample_plane(y_plane, x0, y0)],
+        r_off,
+        g_off,
+        b_off,
+        ch,
+        bgr,
+        clamp_,
+      )
+      write_block_px(
+        out,
+        i00 + ch,
+        t.y_lut[sample_plane(y_plane, x0 + 1, y0)],
+        r_off,
+        g_off,
+        b_off,
+        ch,
+        bgr,
+        clamp_,
+      )
+      write_block_px(
+        out,
+        i10,
+        t.y_lut[sample_plane(y_plane, x0, y0 + 1)],
+        r_off,
+        g_off,
+        b_off,
+        ch,
+        bgr,
+        clamp_,
+      )
+      write_block_px(
+        out,
+        i10 + ch,
+        t.y_lut[sample_plane(y_plane, x0 + 1, y0 + 1)],
+        r_off,
+        g_off,
+        b_off,
+        ch,
+        bgr,
+        clamp_,
+      )
+    }
+  }
+  // 奇数尾列（w 为奇数）：x = w-1，逐像素标量内核。
+  if w % 2 == 1 {
+    let x = w - 1
+    for y in 0..<h {
+      let yy = sample_plane(y_plane, x, y)
+      let (u, v) = sample_uv(frame, x, y)
+      let (r, g, b) = rgb_of_yuv_fx(yy, u, v, t, clamp_)
+      store_px(out, (y * w + x) * ch, r, g, b, ch, bgr)
+    }
+  }
+  // 奇数尾行（h 为奇数）：y = h-1，x 仅覆盖批块未达的偶数范围（角落像素已由尾列写入）。
+  if h % 2 == 1 {
+    let y = h - 1
+    for x in 0..<(w / 2 * 2) {
       let yy = sample_plane(y_plane, x, y)
       let (u, v) = sample_uv(frame, x, y)
       let (r, g, b) = rgb_of_yuv_fx(yy, u, v, t, clamp_)
