@@ -667,6 +667,137 @@ test "mirror_x keeps RGBA channel order and alpha" {
 }
 
 ///|
+/// 循环距离（模 256）：公差口径 `min(|a-b|, 256-|a-b|)`。
+fn cyclic_dist(a : Int32, b : Int32) -> Int32 {
+  let d = if a > b { a - b } else { b - a }
+  if d < 256 - d {
+    d
+  } else {
+    256 - d
+  }
+}
+
+///|
+/// 逐通道断言快/慢两路输出的循环距离 ≤ 1 LSB（公差口径）。
+fn check_within_1lsb(
+  actual : @yuv.RgbImage,
+  expected : @yuv.RgbImage,
+  what : String,
+) -> Unit raise Failure {
+  check_int(actual.width, expected.width, "\{what}: width")
+  check_int(actual.height, expected.height, "\{what}: height")
+  let a = @yuv.RgbImage::bytes(actual)
+  let e = @yuv.RgbImage::bytes(expected)
+  if a.length() != e.length() {
+    fail("\{what}: length \{a.length()}, want \{e.length()}")
+  }
+  for i in 0..<a.length() {
+    let d = cyclic_dist(a.at(i).to_int(), e.at(i).to_int())
+    if d > 1 {
+      fail(
+        "\{what}: byte[\{i}] cyclic distance \{d} > 1 (got \{a.at(i).to_int()}, want \{e.at(i).to_int()})",
+      )
+    }
+  }
+}
+
+///|
+/// 逐字节断言两帧完全一致。
+fn check_exact(
+  actual : @yuv.RgbImage,
+  expected : @yuv.RgbImage,
+  what : String,
+) -> Unit raise Failure {
+  check_int(actual.width, expected.width, "\{what}: width")
+  check_int(actual.height, expected.height, "\{what}: height")
+  check_same_bytes(
+    @yuv.RgbImage::bytes(actual),
+    @yuv.RgbImage::bytes(expected),
+    what,
+  )
+}
+
+///|
+test "to_rgb_fast matches to_rgb within 1 LSB cyclic distance" {
+  let matrices = [
+    @yuv.ColorMatrix::Bt601Limited,
+    @yuv.ColorMatrix::Bt601Full,
+    @yuv.ColorMatrix::Bt709Limited,
+    @yuv.ColorMatrix::Bt709Full,
+  ]
+  let frames = [
+    s_frame(@yuv.YuvFormat::Nv21, [150, 100]),
+    s_frame(@yuv.YuvFormat::Nv12, [100, 150]),
+    s_frame_planar(@yuv.YuvFormat::I420),
+    s_frame_planar(@yuv.YuvFormat::Yuv420888),
+    r_frame(),
+    r_frame_strided(),
+    r_frame_888_strided(),
+  ]
+  for mi in 0..<matrices.length() {
+    for ci in 0..<2 {
+      let clamp_ = ci == 1
+      for fi in 0..<frames.length() {
+        let config = config_of(
+          matrices[mi],
+          @yuv.RgbLayout::Rgb,
+          @yuv.Rotation::D0,
+          false,
+          clamp_,
+        )
+        let slow = @yuv.to_rgb(frames[fi], config)
+        let fast = @yuv.to_rgb_fast(frames[fi], config)
+        check_within_1lsb(
+          fast,
+          slow,
+          "frame \{fi} matrix \{mi} clamp \{clamp_}",
+        )
+        assert_true(fast.timestamp_ns == slow.timestamp_ns)
+      }
+    }
+  }
+}
+
+///|
+test "to_rgb_fast compact vs strided frames agree exactly" {
+  // 同一像素值、不同 stride 布局，快路径读取的采样序列一致，输出必须逐字节相同。
+  let config = config_of(
+    @yuv.ColorMatrix::Bt601Full,
+    @yuv.RgbLayout::Rgba,
+    @yuv.Rotation::D0,
+    false,
+    true,
+  )
+  let compact = @yuv.to_rgb_fast(r_frame(), config)
+  let strided = @yuv.to_rgb_fast(r_frame_strided(), config)
+  check_exact(strided, compact, "nv21 compact vs strided")
+  let strided_888 = @yuv.to_rgb_fast(r_frame_888_strided(), config)
+  check_exact(strided_888, compact, "yuv420888 strided vs nv21 compact")
+}
+
+///|
+test "to_rgb_fast geometry equals rotate then mirror_x pipeline" {
+  let base_config = config_of(
+    @yuv.ColorMatrix::Bt601Full,
+    @yuv.RgbLayout::Rgb,
+    @yuv.Rotation::D0,
+    false,
+    true,
+  )
+  let base = @yuv.to_rgb_fast(r_frame(), base_config)
+  let expected = @yuv.mirror_x(@yuv.rotate(base, @yuv.Rotation::D90))
+  let config = config_of(
+    @yuv.ColorMatrix::Bt601Full,
+    @yuv.RgbLayout::Rgb,
+    @yuv.Rotation::D90,
+    true,
+    true,
+  )
+  let actual = @yuv.to_rgb_fast(r_frame(), config)
+  check_exact(actual, expected, "fast pipeline equality")
+}
+
+///|
 test "channels and bytes accessors" {
   let rgb = @yuv.RgbImage::{
     width: 1,

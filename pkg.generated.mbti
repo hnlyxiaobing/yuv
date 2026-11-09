@@ -12,6 +12,8 @@ pub fn rotate(RgbImage, Rotation) -> RgbImage raise YuvError
 
 pub fn to_rgb(YuvFrame, ConvertConfig) -> RgbImage raise YuvError
 
+pub fn to_rgb_fast(YuvFrame, ConvertConfig) -> RgbImage raise YuvError
+
 // Errors
 #derive(@debug.Debug)
 pub suberror YuvError {

@@ -146,6 +146,47 @@ pub fn to_rgb(
 }
 
 ///|
+/// YUV 帧 → RGB 图像（定点查表快路径）。
+///
+/// 与 `to_rgb` 的关系：
+/// - **语义一致**：参数、返回、错误、几何（先按 `config.rotation` 旋转、
+///   再按 `config.mirror_x` 翻转）、clamp 规则完全相同；错误路径共用同一校验
+///   （`validate_frame` / 尺寸可寻址检查），畸形输入以 `YuvError` 报错、禁 panic。
+/// - **数值契约**：输出与 `to_rgb` 逐通道**循环距离 ≤ 1 LSB**
+///   （公差口径 `min(|a-b|, 256-|a-b|) ≤ 1`，误差来源与上界见 `fast.mbt`）；
+///   取整规则同为 0.5 向 +∞，仅当浮点参考值恰落在取整边界附近时才可能出现 ±1。
+/// - **实现**：系数定点化（Q16.16）+ 256 项预计算查表 + 2×2 批量/展开快路径
+///   （MoonBit 不暴露 SIMD 指令，以批量整数 + 查表 + 循环展开等效实现，
+///   与标量路径逐字节等价，见 `yuv_wbtest.mbt` 等价性测试）。
+/// - 线程：无可变全局状态（定点表按调用构造），纯函数，可并发调用。
+pub fn to_rgb_fast(
+  frame : YuvFrame,
+  config : ConvertConfig,
+) -> RgbImage raise YuvError {
+  validate_frame(frame)
+  let ch = channels_of_layout(config.layout)
+  let size64 = frame.width.to_int64() * frame.height.to_int64() * ch.to_int64()
+  if size64 > 2147483647L {
+    raise YuvError::InvalidDimensions(frame.width, frame.height)
+  }
+  let t = fx_table_for(config.matrix)
+  let (base, w, h) = convert_base_fx(frame, config.layout, t, config.clamp)
+  let (data, ow, oh) = rotate_buffer(base, w, h, ch, config.rotation)
+  let out_data = if config.mirror_x {
+    mirror_buffer(data, ow, oh, ch)
+  } else {
+    data
+  }
+  RgbImage::{
+    width: ow,
+    height: oh,
+    layout: config.layout,
+    data: out_data,
+    timestamp_ns: frame.timestamp_ns,
+  }
+}
+
+///|
 /// 旋转 RGB 图像（顺时针，返回新值，不修改输入）。
 ///
 /// D0 返回内容一致的新 `RgbImage`；D90 / D270 输出宽高互换。
