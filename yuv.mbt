@@ -2,7 +2,7 @@
 /// YUV 转换基础库的类型与接口契约。
 ///
 /// 本库是「纯计算 + 帧值类型」叶子库：无平台依赖、无 FFI、无外部句柄。
-/// 跨模块帧数据契约见 docs/architecture.md（Wire Contract）：所有帧都以
+/// 跨模块帧数据契约（Wire Contract）：所有帧都以
 /// `width / height / format / Bytes` 表达，由组合根在各库同名值类型间做轻量适配。
 /// 本文件是数据结构定义与公开接口；像素计算与校验实现在 convert.mbt。
 

@@ -2,11 +2,11 @@
 
 **YUV 转换基础库 —— NV21 / YUV_420_888 转 RGB、旋转与镜像，纯计算、无平台依赖。**
 
-> 状态：**实现完成，API 冻结前对账（R2 准备轮）**。数据结构与 5 个 API（`to_rgb` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}`）全部为真实实现（0 条 `0068`），四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（35 tests；`pkg.generated.mbti` 与源码对账一致，冻结后签名变更即破坏性变更）。**纯计算、无 I/O、无平台依赖**。
+> 状态：**实现完成，API 冻结前对账已完成（2026-11-07）**。数据结构与 5 个 API（`to_rgb` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}`）全部为真实实现（0 条 `0068`），四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（35 tests；`pkg.generated.mbti` 与源码对账一致，冻结后签名变更即破坏性变更）。**纯计算、无 I/O、无平台依赖**。
 
 ## 定位与为什么存在
 
-路线图「拼图三」复核（2026-11-06）：没有独立的 NV21 / YUV 转换库，但存在 `PaiGack/heic@0.1.0`（内嵌 YUV420→RGBA8）与 `lkdrt/palette_forge@0.1.0`（YUV 色彩空间）。因此判定修正为**移植既有转换内核 + 纯 MoonBit 自研 stride/色彩空间封装**（`docs/capability-matrix.md` #08），比"完全从零自研"少写色彩系数表，同时不引入 HEIC 编解码这类无关大依赖。
+生态检索结论（mooncakes registry，2026-11-06）：没有独立的 NV21 / YUV 转换库，但存在 `PaiGack/heic@0.1.0`（内嵌 YUV420→RGBA8 转换内核）与 `lkdrt/palette_forge@0.1.0`（YUV 色彩空间处理）。因此选型判定为**移植既有转换内核 + 纯 MoonBit 自研 stride/色彩空间封装**，比"完全从零自研"少写色彩系数表，同时不引入 HEIC 编解码这类无关大依赖。两参照包为 mooncakes registry **自述许可**、许可证原文**未逐文件核验**，抽取范围仅限色彩转换系数与算法思路（详见 `DECISIONS.md` §1）。
 
 Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就断在取帧之后。本库是**叶子库**：相机、推理、渲染三方共用其值类型，但本库不依赖任何一方。
 
@@ -22,7 +22,7 @@ Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就�
 ## 依赖
 
 - **本轮零依赖**；独立 `moon.mod`，`moon check` 独立通过。
-- 后续轮：可抽取 `heic@0.1.0` 的转换内核作参照（不引入 HEIC 依赖）；可选 `mizchi/simd@0.6.1` 作 SIMD 快路径评估，但按 ADR-0010 门槛需先说明用途与维护风险。
+- 后续：可继续参照 `PaiGack/heic@0.1.0` 的转换内核（不引入 HEIC 依赖）；可选 `mizchi/simd@0.6.1` 作 SIMD 快路径评估，但按 `DECISIONS.md` §5 的依赖五门槛须先说明用途与维护风险。
 
 ## 平台与许可风险
 
@@ -33,8 +33,8 @@ Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就�
 ## 测试与验收
 
 - **测试策略**：固定像素 golden（含 NV21 与 stride 非紧凑的 YUV_420_888 样本）；BT.601/709 系数差分；尺寸/平面/stride/缓冲非法输入；`moon bench` 阈值（**后移，本轮未引入**）。
-- **验收标准**：输出与参考实现逐像素一致（golden 覆盖）；所有非法输入返回 `YuvError` 而非越界读取（✅）；`moon check --deny-warn` 转绿（✅ R2 准备轮实跑）。
-- **门禁实跑（R2 准备轮，2026-11-07）**：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test`（**35 tests** 全过）→ `moon fmt --check`，全部 exit 0。
+- **验收标准**：输出与参考实现逐像素一致（golden 覆盖）；所有非法输入返回 `YuvError` 而非越界读取（✅）；`moon check --deny-warn` 转绿（✅ 2026-11-07 实跑）。
+- **门禁实跑（2026-11-07）**：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test`（**35 tests** 全过）→ `moon fmt --check`，全部 exit 0。
 
 ## 当前状态 / 本轮产物
 
@@ -46,10 +46,10 @@ Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就�
 | SIMD 快路径 / `moon bench` 阈值门禁 | ⬜ 后续优化（不改公开签名） |
 | 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` | ✅ 全绿（35 tests） |
 
-## 本轮顺序说明
+## 选型与优先理由
 
-按 `docs/dependency-graph.md`，`yuv` 是 W0 第 3 项（排序五判据里 C3/C4/C5 全优：无许可风险、纯函数可测、有可移植内核），并支撑 MVL-S 的起点。
+选型排序判据复核（2026-11-06）：本库**无许可风险、纯函数可测（golden 逐像素测试即可覆盖）、有可移植内核参照**，三项判据全优，因此作为首批实现项之一；同时它是「取帧 → 转换 → 推理」感知链路的像素环节起点。
 
 ## 文档索引
 
-`DESIGN.md` · `API.md` · `../docs/architecture.md` §4（Wire Contract）· `../docs/adr/ADR-0002`、`ADR-0004`、`ADR-0005`
+`DESIGN.md`（设计契约，含 Wire Contract）· `API.md`（公开 API）· `DECISIONS.md`（设计决策记录：选型、值类型与组合根、显式色彩矩阵与 stride、真实实现、依赖五门槛）

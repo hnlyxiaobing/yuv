@@ -1,6 +1,6 @@
 # yuv · 设计契约（DESIGN.md）
 
-> Round-1 起草 / 2026-11-06 ｜ **API 冻结前对账（R2 准备轮）/ 2026-11-07** ｜ 状态：**已实现**（像素转换 / 旋转 / 镜像），无 I/O、四道门禁全绿（冻结后签名变更即破坏性变更）
+> 初稿 2026-11-06 ｜ **API 冻结前对账 / 2026-11-07** ｜ 状态：**已实现**（像素转换 / 旋转 / 镜像），无 I/O、四道门禁全绿（冻结后签名变更即破坏性变更）
 
 ## 1. 分层位置与职责
 
@@ -15,7 +15,7 @@ camera2::YuvFrame  ──(组合根按 Wire 构造)──►  yuv::YuvFrame
                                         yuv::RgbImage ──(组合根按 Wire 构造)──► pose::RgbImage
 ```
 
-零跨模块 import（ADR-0002）。`yuv` 不知道相机与推理的存在；`camera2` / `pose` 各自定义同构值类型，由组合根适配。`pose` **不依赖** `yuv` 的实现，避免 K6 环。
+零跨模块 import（见 `DECISIONS.md` §2）。`yuv` 不知道相机与推理的存在；`camera2` / `pose` 各自定义同构值类型，由组合根适配。`pose` **不依赖** `yuv` 的实现，避免类型复用环（双方都想复用对方的值类型定义而形成循环依赖）。
 
 ## 3. 核心数据结构
 
@@ -59,7 +59,7 @@ camera2::YuvFrame  ──(组合根按 Wire 构造)──►  yuv::YuvFrame
 | `RgbImage` | `RgbImage`（镜像） | `InvalidDimensions` / `BufferSizeMismatch` |
 | `RgbImage` | `Channels` / `Bytes` | 无（只读） |
 
-3 个自由函数（`to_rgb` / `rotate` / `mirror_x`）与 `RgbImage::{channels, bytes}` 两个方法均为 `pub fn` **真实实现**（无 `declare` 占位、无 `0068` 告警）；具体值类型用真实定义（ADR-0001）。
+3 个自由函数（`to_rgb` / `rotate` / `mirror_x`）与 `RgbImage::{channels, bytes}` 两个方法均为 `pub fn` **真实实现**（无 `declare` 占位、无 `0068` 告警）；具体值类型用真实定义（见 `DECISIONS.md` §4）。
 
 ## 9. 可替换性与实现细节不泄漏
 
@@ -72,23 +72,23 @@ camera2::YuvFrame  ──(组合根按 Wire 构造)──►  yuv::YuvFrame
 | 黑盒 | 固定像素 golden：NV21、NV12、I420、YUV_420_888（含 stride ≠ width 的样本）；四种 ColorMatrix；四种 Rotation；镜像 |
 | 白盒 | 平面越界、stride 校验、clamp 边界 |
 | 基准 | `moon bench`：720p / 1080p 单帧耗时固定阈值，防止回退（**本轮未引入 bench**，属后续优化门禁） |
-| 门禁 | 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check`（R2 准备轮实跑全绿，35 tests） |
+| 门禁 | 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check`（2026-11-07 实跑全绿，35 tests） |
 
-## 11. 验收标准（实现轮；R2 准备轮复核）
+## 11. 验收标准（2026-11-07 复核）
 
-1. 与参考实现逐像素一致（golden 覆盖 NV21 / NV12 / I420 / YUV_420_888 与四种 `ColorMatrix`）；2. 所有非法输入返回 `YuvError` 而非越界读取（✅）；3. `moon bench` 不回退（⬜ bench 未引入，后移）；4. `moon check --deny-warn` 转绿（✅ R2 准备轮实跑）。
+1. 与参考实现逐像素一致（golden 覆盖 NV21 / NV12 / I420 / YUV_420_888 与四种 `ColorMatrix`）；2. 所有非法输入返回 `YuvError` 而非越界读取（✅）；3. `moon bench` 不回退（⬜ bench 未引入，后移）；4. `moon check --deny-warn` 转绿（✅ 2026-11-07 实跑）。
 
 ## 12. 未解决问题 / 待验证假设
 
-- `heic@0.1.0` 转换内核的可移植性未实测（`[待验证假设]`）。
+- 参照包 `PaiGack/heic@0.1.0` 转换内核的可移植性未实测（`[待验证假设]`，见 `DECISIONS.md` §1）。
 - SIMD 快路径在 wasm / native 两目标的一致性与收益未验证。
 - BT.601 全幅度 vs 有限幅度的目标设备实际约定需真机确认。
 - `moon bench` 阈值门禁尚未引入（无 bench 资产）。
 
 ## 13. 当前状态
 
-`yuv.mbt` / `convert.mbt` 的全部类型与 3 个自由函数（`to_rgb` / `rotate` / `mirror_x`）+ `RgbImage::{channels, bytes}` 均为**真实实现**，公开 API 带 `///` 文档注释；`pkg.generated.mbti` 快照与源码一致。**无 I/O、无 FFI、无外部依赖**（非目标不变）。四道门禁全绿（35 tests，R2 准备轮实跑）。
+`yuv.mbt` / `convert.mbt` 的全部类型与 3 个自由函数（`to_rgb` / `rotate` / `mirror_x`）+ `RgbImage::{channels, bytes}` 均为**真实实现**，公开 API 带 `///` 文档注释；`pkg.generated.mbti` 快照与源码一致。**无 I/O、无 FFI、无外部依赖**（非目标不变）。四道门禁全绿（35 tests，2026-11-07 实跑）。
 
 ## References
 
-`../docs/architecture.md` §4 · `../docs/adr/ADR-0002`、`ADR-0004` · `https://developer.android.google.cn/ndk/reference/group/media`（YUV_420_888）
+`DECISIONS.md`（设计决策记录：Wire Contract 与值类型定义策略、依赖五门槛）· `https://developer.android.google.cn/ndk/reference/group/media`（YUV_420_888）

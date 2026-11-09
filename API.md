@@ -1,6 +1,6 @@
 # yuv · 公开 API（API.md）
 
-> **API 冻结前对账（R2 准备轮，2026-11-07）**：本文已与 `pkg.generated.mbti` 快照及源码公开签名逐项对账一致；**冻结后签名变更即破坏性变更**。
+> **API 冻结前对账已完成（2026-11-07）**：本文已与 `pkg.generated.mbti` 快照及源码公开签名逐项对账一致；**冻结后签名变更即破坏性变更**。
 > 3 个自由函数与 2 个方法均为**真实实现**（`pub fn`，非 `declare` 占位，0 条 `0068`）。
 > 错误传播统一 `raise YuvError`；无外部句柄；所有转换返回新值、不修改输入。
 
@@ -36,7 +36,7 @@
 
 ## Wire 契约提示
 
-`yuv::YuvFrame` 与 `camera2::YuvFrame`、`yuv::RgbImage` 与 `pose::RgbImage` **结构同构但类型不同**（MoonBit 名义类型）。组合根负责构造目标类型，`Bytes` 为引用计数，浅拷贝成本低。见 `../docs/architecture.md` §4。
+`yuv::YuvFrame` 与 `camera2::YuvFrame`、`yuv::RgbImage` 与 `pose::RgbImage` **结构同构但类型不同**（MoonBit 名义类型），各自定义、由组合根适配。组合根负责构造目标类型，`Bytes` 为引用计数，浅拷贝成本低。Wire 契约详见 `DESIGN.md` §2、`DECISIONS.md` §2。
 
 ## 非目标
 
@@ -44,6 +44,6 @@
 
 ## 状态
 
-**API 冻结前对账（R2 准备轮）**：API.md ↔ `pkg.generated.mbti` ↔ 源码公开签名三方一致；**冻结后签名变更即破坏性变更**。
+**API 冻结前对账已完成**：API.md ↔ `pkg.generated.mbti` ↔ 源码公开签名三方一致；**冻结后签名变更即破坏性变更**。
 四道门禁实跑全绿（2026-11-07）：`moon check --deny-warn`（0 error / 0 warn）· `moon build` · `moon test`（**35 tests** 全过）· `moon fmt --check`。
 API 快照：`pkg.generated.mbti`（只读，未改动）。实现：✅ `to_rgb` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}` 均为真实实现；SIMD 快路径与 `moon bench` 阈值为后续优化（不改公开签名）。
