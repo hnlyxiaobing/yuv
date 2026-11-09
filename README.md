@@ -2,7 +2,7 @@
 
 **YUV 转换基础库 —— NV21 / YUV_420_888 转 RGB、旋转与镜像，纯计算、无平台依赖。**
 
-> 状态：**实现完成，API 冻结前对账已完成（2026-11-07）**。数据结构与 5 个 API（`to_rgb` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}`）全部为真实实现（0 条 `0068`），四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（35 tests；`pkg.generated.mbti` 与源码对账一致，冻结后签名变更即破坏性变更）。**纯计算、无 I/O、无平台依赖**。
+> 状态：**实现完成 + R4 性能轮（2026-11-09）**。数据结构与 6 个 API（`to_rgb` / `to_rgb_fast` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}`）全部为真实实现（0 条 `0068`），四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（**47 tests**；`pkg.generated.mbti` 与源码对账一致，冻结后签名变更即破坏性变更）。`moon bench` 6 项基准 + fail-closed 阈值门禁实测通过（见下）。**纯计算、无 I/O、无平台依赖**。
 
 ## 定位与为什么存在
 
@@ -28,23 +28,36 @@ Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就�
 
 - 平台：全后端（`preferred_target = "wasm"`，未改动）；桌面即可测试，是本轮**成本最低、可测试性最高**的库。
 - 许可：本仓库 Apache-2.0；转换算法为公开标准系数，无外部二进制、无再分发风险。
-- 风险：色彩空间系数必须显式（避免隐式 BT.601 假设）；YUV_420_888 三平面 U/V 共享 `rowStride`/`pixelStride`、Y 平面 pixelStride=1，不能假设紧凑布局（**已按 stride 校验实现**）；大图逐像素性能计划用 `moon bench` 固定阈值守门（**本轮未引入 bench**，属后续优化）。
+- 风险：色彩空间系数必须显式（避免隐式 BT.601 假设）；YUV_420_888 三平面 U/V 共享 `rowStride`/`pixelStride`、Y 平面 pixelStride=1，不能假设紧凑布局（**已按 stride 校验实现**）；大图逐像素性能由 `moon bench` + `tools/bench-gate.ps1` 固定阈值守门（**已落地，fail-closed**）。
+
+## 性能（R4，2026-11-09 实测）
+
+参考路径 `to_rgb` 与定点快路径 `to_rgb_fast`（Q16.16 系数表 + 2×2 批量展开内核，输出逐字节等价）：
+
+| 基准（640×480） | 均值 (ms) |
+|---|---|
+| `to_rgb nv21` / `to_rgb_fast nv21` | 22.75 / **8.68** |
+| `to_rgb i420` / `to_rgb_fast i420` | 26.60 / **9.28** |
+| `rotate d90` / `mirror_x` | 2.58 / 2.62 |
+
+阈值门禁：`powershell -File tools/bench-gate.ps1`（绝对阈值含 ~3x 余量 + 「快路径不得慢于参考路径」相对硬门禁；缺基准/解析失败一律 fail-closed，退出码 0/1）。
 
 ## 测试与验收
 
-- **测试策略**：固定像素 golden（含 NV21 与 stride 非紧凑的 YUV_420_888 样本）；BT.601/709 系数差分；尺寸/平面/stride/缓冲非法输入；`moon bench` 阈值（**后移，本轮未引入**）。
-- **验收标准**：输出与参考实现逐像素一致（golden 覆盖）；所有非法输入返回 `YuvError` 而非越界读取（✅）；`moon check --deny-warn` 转绿（✅ 2026-11-07 实跑）。
-- **门禁实跑（2026-11-07）**：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test`（**35 tests** 全过）→ `moon fmt --check`，全部 exit 0。
+- **测试策略**：固定像素 golden（含 NV21 与 stride 非紧凑的 YUV_420_888 样本）；BT.601/709 系数差分；尺寸/平面/stride/缓冲非法输入；快慢路径逐字节等价断言；`moon bench` 阈值门禁（**已落地**）。
+- **验收标准**：输出与参考实现逐像素一致（golden 覆盖）；所有非法输入返回 `YuvError` 而非越界读取（✅）；`moon check --deny-warn` 转绿（✅ 2026-11-09 实跑）。
+- **门禁实跑（2026-11-09）**：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test`（**47 tests** 全过）→ `moon fmt --check` → 第 5 道快照门禁（`moon info` 后 `pkg.generated.mbti` 无 diff）→ `tools/bench-gate.ps1`（PASSED），全部 exit 0。
 
 ## 当前状态 / 本轮产物
 
 | 项 | 状态 |
 |---|---|
-| `yuv.mbt` / `convert.mbt`：数据结构 + 5 个 API（真实实现）+ 文档注释 | ✅ |
+| `yuv.mbt` / `convert.mbt` / `fast.mbt`：数据结构 + 6 个 API（真实实现）+ 文档注释 | ✅ |
 | `pkg.generated.mbti` API 快照（与源码对账一致） | ✅ |
 | 像素计算 / 旋转 / 镜像 | ✅ 已实现 |
-| SIMD 快路径 / `moon bench` 阈值门禁 | ⬜ 后续优化（不改公开签名） |
-| 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` | ✅ 全绿（35 tests） |
+| 定点快路径 `to_rgb_fast`（Q16.16 + 2×2 批量）/ 等价性测试 | ✅ 已实现（加法性 API） |
+| `moon bench` 6 基准 + fail-closed 阈值门禁（`tools/bench-gate.ps1`） | ✅ 已落地，实测 PASSED |
+| 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` | ✅ 全绿（47 tests） |
 
 ## 选型与优先理由
 
