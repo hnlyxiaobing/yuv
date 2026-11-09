@@ -87,7 +87,7 @@ camera2::YuvFrame  ──(组合根按 Wire 构造)──►  yuv::YuvFrame
 
 ## 13. 当前状态
 
-`yuv.mbt` / `convert.mbt` 的全部类型与 3 个自由函数（`to_rgb` / `rotate` / `mirror_x`）+ `RgbImage::{channels, bytes}` 均为**真实实现**，公开 API 带 `///` 文档注释；`pkg.generated.mbti` 快照与源码一致。**无 I/O、无 FFI、无外部依赖**（非目标不变）。四道门禁全绿（35 tests，2026-11-07 实跑）。
+`../yuv.mbt` / `../convert.mbt` 的全部类型与 3 个自由函数（`to_rgb` / `rotate` / `mirror_x`）+ `RgbImage::{channels, bytes}` 均为**真实实现**，公开 API 带 `///` 文档注释；`../pkg.generated.mbti` 快照与源码一致。**无 I/O、无 FFI、无外部依赖**（非目标不变）。四道门禁全绿（35 tests，2026-11-07 实跑）。
 
 ## References
 

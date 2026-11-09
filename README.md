@@ -6,7 +6,7 @@
 
 ## 定位与为什么存在
 
-生态检索结论（mooncakes registry，2026-11-06）：没有独立的 NV21 / YUV 转换库，但存在 `PaiGack/heic@0.1.0`（内嵌 YUV420→RGBA8 转换内核）与 `lkdrt/palette_forge@0.1.0`（YUV 色彩空间处理）。因此选型判定为**移植既有转换内核 + 纯 MoonBit 自研 stride/色彩空间封装**，比"完全从零自研"少写色彩系数表，同时不引入 HEIC 编解码这类无关大依赖。两参照包为 mooncakes registry **自述许可**、许可证原文**未逐文件核验**，抽取范围仅限色彩转换系数与算法思路（详见 `DECISIONS.md` §1）。
+生态检索结论（mooncakes registry，2026-11-06）：没有独立的 NV21 / YUV 转换库，但存在 `PaiGack/heic@0.1.0`（内嵌 YUV420→RGBA8 转换内核）与 `lkdrt/palette_forge@0.1.0`（YUV 色彩空间处理）。因此选型判定为**移植既有转换内核 + 纯 MoonBit 自研 stride/色彩空间封装**，比"完全从零自研"少写色彩系数表，同时不引入 HEIC 编解码这类无关大依赖。两参照包为 mooncakes registry **自述许可**、许可证原文**未逐文件核验**，抽取范围仅限色彩转换系数与算法思路（详见 `docs/DECISIONS.md` §1）。
 
 Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就断在取帧之后。本库是**叶子库**：相机、推理、渲染三方共用其值类型，但本库不依赖任何一方。
 
@@ -17,12 +17,12 @@ Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就�
 
 ## 公开接口（速览）
 
-`to_rgb(YuvFrame, ConvertConfig) -> RgbImage raise YuvError`、`rotate`、`mirror_x`、`RgbImage::{channels, bytes}`。完整签名见 `API.md`。
+`to_rgb(YuvFrame, ConvertConfig) -> RgbImage raise YuvError`、`rotate`、`mirror_x`、`RgbImage::{channels, bytes}`。完整签名见 `docs/API.md`。
 
 ## 依赖
 
 - **本轮零依赖**；独立 `moon.mod`，`moon check` 独立通过。
-- 后续：可继续参照 `PaiGack/heic@0.1.0` 的转换内核（不引入 HEIC 依赖）；可选 `mizchi/simd@0.6.1` 作 SIMD 快路径评估，但按 `DECISIONS.md` §5 的依赖五门槛须先说明用途与维护风险。
+- 后续：可继续参照 `PaiGack/heic@0.1.0` 的转换内核（不引入 HEIC 依赖）；可选 `mizchi/simd@0.6.1` 作 SIMD 快路径评估，但按 `docs/DECISIONS.md` §5 的依赖五门槛须先说明用途与维护风险。
 
 ## 平台与许可风险
 
@@ -65,4 +65,4 @@ Android 相机输出 YUV，推理与渲染吃 RGB，缺这一环体感闭环就�
 
 ## 文档索引
 
-`DESIGN.md`（设计契约，含 Wire Contract）· `API.md`（公开 API）· `DECISIONS.md`（设计决策记录：选型、值类型与组合根、显式色彩矩阵与 stride、真实实现、依赖五门槛）
+`docs/DESIGN.md`（设计契约，含 Wire Contract）· `docs/API.md`（公开 API）· `docs/DECISIONS.md`（设计决策记录：选型、值类型与组合根、显式色彩矩阵与 stride、真实实现、依赖五门槛）

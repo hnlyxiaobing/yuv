@@ -4,6 +4,6 @@
 
 纯计算叶子库：YUV → RGB、旋转、镜像；Frame/Rgb Wire 契约的一端。
 
-完整文档见同目录 `README.md`、`DESIGN.md`、`API.md`、`DECISIONS.md`（设计决策记录）。
+完整文档见项目根目录与 `docs/` 目录：`README.md`、`docs/DESIGN.md`、`docs/API.md`、`docs/DECISIONS.md`（设计决策记录）。
 
 **当前状态：实现完成，四道门禁全绿，等待集成。**

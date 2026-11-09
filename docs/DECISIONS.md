@@ -2,7 +2,7 @@
 
 > 本文记录 `yuv` 的关键设计决策（背景 → 决策 → 理由 → 后果），内容**源自开发期决策记录**（原文档属于作者本地开发工作区的管理材料，不随本仓库发布），已改写为完全自足的表述。社区开发者仅凭本仓库即可理解全部设计动机，无需任何仓库外文件。
 >
-> 相关文档：`README.md`（总览）· `DESIGN.md`（设计契约）· `API.md`（公开 API）。
+> 相关文档：`../README.md`（总览）· `DESIGN.md`（设计契约）· `API.md`（公开 API）。
 
 ## 1. 选型：移植转换内核 + 纯 MoonBit 自研封装
 
@@ -43,7 +43,7 @@ MoonBit 是名义类型系统：两个模块里结构完全相同的 `struct` �
 
 ### 决策
 
-- **零跨模块 import**：本库不 import 任何其他模块，也不要求任何模块 import 本库；独立 `moon.mod`，`moon check` 独立通过。
+- **零跨模块 import**：本库不 import 任何其他模块，也不要求任何模块 import 本库；独立 `../moon.mod`，`moon check` 独立通过。
 - **Wire Contract（帧数据契约）**：跨模块传递的帧 / 图像一律是 `{ width, height, format, Bytes, timestamp }` 形状的**纯值**。`yuv::YuvFrame` 与 `camera2::YuvFrame`、`yuv::RgbImage` 与 `pose::RgbImage` **结构同构但类型不同**（名义类型），各模块**各自定义**自己的同构值类型，不共享类型定义。
 - **组合根适配**：由应用侧的组合根（composition root，不是库）用 Wire 值在各库同名值类型间做轻量适配（`Bytes` 为引用计数，浅拷贝成本低）；`pose` **不依赖** `yuv` 的实现，`yuv` 也不知道相机与推理的存在。
 - 抽象（trait）放在消费方，实现方不反向依赖（如 `FrameConverter` 只是纯计算契约）。
@@ -57,7 +57,7 @@ MoonBit 是名义类型系统：两个模块里结构完全相同的 `struct` �
 ### 后果
 
 - **正面**：零依赖、无环、纯值可并发；可替换性与"实现细节不泄漏"由类型边界保证。
-- **负面**：同构值类型在多个模块各定义一次，存在**结构漂移风险**——由 `pkg.generated.mbti` API 快照对账与组合根测试守住；组合根需写少量显式适配代码。
+- **负面**：同构值类型在多个模块各定义一次，存在**结构漂移风险**——由 `../pkg.generated.mbti` API 快照对账与组合根测试守住；组合根需写少量显式适配代码。
 
 ## 3. 色彩矩阵与 stride 全显式
 
@@ -104,7 +104,7 @@ MoonBit 是名义类型系统：两个模块里结构完全相同的 `struct` �
 
 ### 后果
 
-- **正面**：四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（35 tests，0 条 0068）；`pkg.generated.mbti` API 快照与源码对账一致。
+- **正面**：四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（35 tests，0 条 0068）；`../pkg.generated.mbti` API 快照与源码对账一致。
 - **负面**：类型形状与函数签名已固定，**API 冻结后签名变更即破坏性变更**，需升主版本。
 
 ## 5. 后续可选依赖必须通过五门槛
@@ -130,7 +130,7 @@ SIMD 快路径之类的优化收益未量化（wasm / native 两目标的一致�
 ### 后果
 
 - SIMD 快路径与 `moon bench` 阈值门禁保持为**后续可选优化，不改公开签名**；
-- 任何未过五门槛的包只作**设计参照**（借鉴写法 / 算法思路），不进入 `moon.mod` / `moon.pkg`。
+- 任何未过五门槛的包只作**设计参照**（借鉴写法 / 算法思路），不进入 `../moon.mod` / `../moon.pkg`。
 
 ---
 
