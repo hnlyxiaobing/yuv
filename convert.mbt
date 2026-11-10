@@ -152,7 +152,14 @@ fn validate_frame(frame : YuvFrame) -> Unit raise YuvError {
   let chh = h / 2 + h % 2
   check_plane(frame.planes[0], 0, w, h, 1)
   match frame.format {
-    Nv21 | Nv12 => check_plane(frame.planes[1], 1, cw, chh, 2)
+    Nv21 | Nv12 => {
+      check_plane(frame.planes[1], 1, cw, chh, 2)
+      if frame.planes[1].pixel_stride != 2 {
+        raise YuvError::StrideMismatch(
+          "plane 1: NV21/NV12 chroma pixel_stride must be exactly 2, got \{frame.planes[1].pixel_stride}",
+        )
+      }
+    }
     I420 | Yuv420888 => {
       check_plane(frame.planes[1], 1, cw, chh, 1)
       check_plane(frame.planes[2], 2, cw, chh, 1)

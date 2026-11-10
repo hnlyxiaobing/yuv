@@ -233,6 +233,25 @@ test "rejects invalid stride values" {
 }
 
 ///|
+test "NV21/NV12 chroma pixel_stride must be exactly 2" {
+  // pixel_stride = 3: passes old lower-bound check but is not valid NV21/NV12
+  let e = expect_yuv_error(
+    () => {
+      to_rgb(
+        nv21_frame(4, 4, [
+          plane([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 4, 1),
+          plane([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 6, 3),
+        ]),
+        config_of(Bt601Full, true),
+      )
+      |> ignore
+    },
+    "NV21 pixel_stride 3",
+  )
+  assert_true(e is YuvError::StrideMismatch(_))
+}
+
+///|
 test "rotate and mirror_x reject mismatched rgb buffer size" {
   let img = RgbImage::{
     width: 2,
