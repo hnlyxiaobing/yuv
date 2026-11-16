@@ -1,9 +1,7 @@
 # hnlyxiaobing/yuv
 
-> 实现完成 · **API 冻结前对账已完成（2026-11-07）**。本包提供中性帧/图像值类型、转换配置与 `to_rgb` / `rotate` / `mirror_x` / `RgbImage::{channels, bytes}` 的**真实实现**，**纯计算、无 I/O**。四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check`：全绿（35 tests，0 条 `0068`）。**冻结后签名变更即破坏性变更。**
+纯计算地把四种 YUV 布局转成 RGB，并提供旋转、镜像与定点快路径。
 
-纯计算叶子库：YUV → RGB、旋转、镜像；Frame/Rgb Wire 契约的一端。
+本包是独立发布单元。完整说明（能力边界、公开 API、依赖、验证、风险与未决）见本仓库 `README.md`；公开签名以 `pkg.generated.mbti` 为准。
 
-完整文档见项目根目录与 `docs/` 目录：`README.md`、`docs/DESIGN.md`、`docs/API.md`、`docs/DECISIONS.md`（设计决策记录）。
-
-**当前状态：实现完成，四道门禁全绿，等待集成。**
+许可：Apache-2.0。
